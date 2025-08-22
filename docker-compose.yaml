@@ -37,6 +37,10 @@ services:
     depends_on:
       - prometheus
       - loki
+    environment:
+      - GRAFANA_PDC_TOKEN=${GRAFANA_PDC_TOKEN}
+      - GRAFANA_PDC_CLUSTER=${GRAFANA_PDC_CLUSTER}
+      - GRAFANA_PDC_GCP_ID=${GRAFANA_PDC_GCP_ID}
     command: ["-token","${GRAFANA_PDC_TOKEN}","-cluster","${GRAFANA_PDC_CLUSTER}","-gcloud-hosted-grafana-id","${GRAFANA_PDC_GCP_ID}"]
 
   loki:
