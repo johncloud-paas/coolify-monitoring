@@ -228,3 +228,23 @@ services:
       - "--web.enable-lifecycle"
     environment:
       - TZ=${TZ}
+
+  speedtest:
+    image: lscr.io/linuxserver/speedtest-tracker:latest
+    healthcheck:
+      test: curl -fSs https://$HOST/api/healthcheck | jq -r .message || exit 1
+      interval: 10s
+      retries: 3
+      start_period: 30s
+      timeout: 10s
+    environment:
+      - APP_KEY=${SPEEDTEST_KEY}
+      - ADMIN_EMAIL=${SPEEDTEST_ADMIN_EMAIL}
+      - ADMIN_PASSWORD=${SPEEDTEST_ADMIN_PASSWORD}
+      - DB_CONNECTION=sqlite
+      - APP_TIMEZONE=${TZ}
+      - DISPLAY_TIMEZONE=${TZ}
+      - SPEEDTEST_SCHEDULE=${SPEEDTEST_SCHEDULE}
+      - SPEEDTEST_SERVERS=${SPEEDTEST_SERVERS}
+    volumes:
+      - ${COOLIFY_VOLUME_APP}/speedtest:/config
