@@ -6,13 +6,6 @@
 
 services:
   # https://coolify.io/docs/get-started/contribute/service
-  # app:
-  #   image: your-service-image:tag
-  #   environment:
-  #     - DATABASE_URL=${COOLIFY_DATABASE_URL}
-  #   volumes:
-  #     - ${COOLIFY_VOLUME_APP}:/data
-
   node_exporter:
     image: quay.io/prometheus/node-exporter:latest
     command:
@@ -21,7 +14,7 @@ services:
     volumes:
       - /:/host:ro,rslave
     environment:
-      - TZ=$TZ
+      - TZ=${TZ}
     depends_on:
       - prometheus
 
@@ -34,7 +27,7 @@ services:
       - /var/lib/docker/:/var/lib/docker:ro
     command: -max_procs=2 -docker_only=true
     environment:
-      - TZ=$TZ
+      - TZ=${TZ}
     depends_on:
       - prometheus
 
@@ -44,7 +37,7 @@ services:
     depends_on:
       - prometheus
       - loki
-    command: ["-token","$GRAFANA_PDC_TOKEN","-cluster","$GRAFANA_PDC_CLUSTER","-gcloud-hosted-grafana-id","$GRAFANA_PDC_GCP_ID"]
+    command: ["-token","${GRAFANA_PDC_TOKEN}","-cluster","${GRAFANA_PDC_CLUSTER}","-gcloud-hosted-grafana-id","${GRAFANA_PDC_GCP_ID}"]
 
   loki:
     image: grafana/loki:latest
@@ -111,7 +104,7 @@ services:
             enable_api: true
     command: -config.file=/etc/loki/loki-config.yaml
     environment:
-      - TZ=$TZ
+      - TZ=${TZ}
 
   promtail:
     image:  grafana/promtail:latest
@@ -173,7 +166,7 @@ services:
                     __path__: /var/logs/traefik/*log
     command: -config.file=/etc/promtail/promtail-config.yaml
     environment:
-      - TZ=$TZ
+      - TZ=${TZ}
 
   prometheus:
     image: prom/prometheus:main
@@ -220,8 +213,8 @@ services:
               labels:
                 severity: page
               annotations:
-                summary: "Instance {{ $labels.instance }} down"
-                description: "{{ $labels.instance }} of job {{ $labels.job }} has been down for more than 2 minutes"
+                summary: "Instance {{ $$labels.instance }} down"
+                description: "{{ $$labels.instance }} of job {{ $$labels.job }} has been down for more than 2 minutes"
     command:
       - "--web.route-prefix=/"
       - "--config.file=/etc/prometheus/prometheus.yml"
@@ -230,4 +223,4 @@ services:
       - "--web.console.templates=/usr/share/prometheus/consoles"
       - "--web.enable-lifecycle"
     environment:
-      - TZ=$TZ
+      - TZ=${TZ}
