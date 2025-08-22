@@ -30,6 +30,10 @@ services:
       - TZ=${TZ}
     depends_on:
       - prometheus
+    labels:
+      - prometheus.job=cadvisor
+      - prometheus.address=cadvisor
+      - prometheus.port:8080
 
   pdc:
     # https://grafana.com/docs/grafana-cloud/connect-externally-hosted/private-data-source-connect/#private-data-source-connect-pdc-concepts
@@ -179,6 +183,7 @@ services:
       - ${COOLIFY_VOLUME_APP}/prometheus:/prometheus
       - /etc/timezone:/etc/timezone:ro
       - /etc/localtime:/etc/localtime:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
       - type: bind
         source: ./prometheus/config.yml
         target: /etc/prometheus/prometheus.yml
