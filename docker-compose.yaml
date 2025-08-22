@@ -203,6 +203,7 @@ services:
               relabel_configs:
                 - source_labels: [__meta_docker_container_label_prometheus_job]
                   target_label: job
+                  regex: (.+)
                 - source_labels: [__meta_docker_container_label_prometheus_address]
                   target_label: __address__
                   regex: (.+)
