@@ -1,0 +1,233 @@
+# documentation: https://docs.example.com/
+# slogan: A brief description of your service.
+# tags: tag1,tag2,tag3
+# logo: svgs/your-service.svg
+# port: 1234
+
+services:
+  # https://coolify.io/docs/get-started/contribute/service
+  # app:
+  #   image: your-service-image:tag
+  #   environment:
+  #     - DATABASE_URL=${COOLIFY_DATABASE_URL}
+  #   volumes:
+  #     - ${COOLIFY_VOLUME_APP}:/data
+
+  node_exporter:
+    image: quay.io/prometheus/node-exporter:latest
+    command:
+      - '--path.rootfs=/host'
+    pid: host
+    volumes:
+      - /:/host:ro,rslave
+    environment:
+      - TZ=$TZ
+    depends_on:
+      - prometheus
+
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:latest
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+    command: -max_procs=2 -docker_only=true
+    environment:
+      - TZ=$TZ
+    depends_on:
+      - prometheus
+
+  pdc:
+    # https://grafana.com/docs/grafana-cloud/connect-externally-hosted/private-data-source-connect/#private-data-source-connect-pdc-concepts
+    image: grafana/pdc-agent:latest
+    depends_on:
+      - prometheus
+      - loki
+    command: ["-token","$GRAFANA_PDC_TOKEN","-cluster","$GRAFANA_PDC_CLUSTER","-gcloud-hosted-grafana-id","$GRAFANA_PDC_GCP_ID"]
+
+  loki:
+    image: grafana/loki:latest
+    user: "0:0"
+    depends_on:
+      - promtail
+    volumes:
+      - ${COOLIFY_VOLUME_APP}/loki:/loki
+      - type: bind
+        source: ./loki/config.yaml
+        target: /etc/loki/loki-config.yaml
+        content: |
+          auth_enabled: false
+          server:
+            http_listen_port: 3100
+          ingester:
+            lifecycler:
+              address: 127.0.0.1
+              ring:
+                kvstore:
+                  store: inmemory
+                replication_factor: 1
+              final_sleep: 0s
+            chunk_idle_period: 1h
+            max_chunk_age: 1h
+            chunk_target_size: 1048576
+            chunk_retain_period: 30s
+          schema_config:
+            configs:
+              - from: 2020-10-24
+                # store: boltdb-shipper
+                store: tsdb
+                object_store: filesystem
+                schema: v13
+                index:
+                  prefix: index_
+                  period: 24h
+          storage_config:
+            filesystem:
+              directory: /loki/chunks
+            tsdb_shipper:
+              active_index_directory: /loki/index
+              cache_location: /loki/cache
+          compactor:
+            working_directory: /loki/boltdb-shipper-compactor
+          limits_config:
+            reject_old_samples: true
+            reject_old_samples_max_age: 168h
+            ingestion_burst_size_mb: 16
+            ingestion_rate_mb: 16
+          table_manager:
+            retention_deletes_enabled: false
+            retention_period: 0s
+          ruler:
+            storage:
+              type: local
+              local:
+                directory: /loki/rules
+            rule_path: /loki/rules-temp
+            alertmanager_url: localhost
+            ring:
+              kvstore:
+                store: inmemory
+            enable_api: true
+    command: -config.file=/etc/loki/loki-config.yaml
+    environment:
+      - TZ=$TZ
+
+  promtail:
+    image:  grafana/promtail:latest
+    volumes:
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /data/coolify/proxy/accesslogs:/var/logs/traefik:ro
+      - type: bind
+        source: ./promtail/config.yml
+        target: /etc/promtail/promtail-config.yaml
+        content: |
+          server:
+            http_listen_port: 9080
+            grpc_listen_port: 0
+          positions:
+            filename: /tmp/positions.yaml
+          clients:
+            - url: http://loki:3100/loki/api/v1/push
+          scrape_configs:
+            - job_name: container_logs
+              docker_sd_configs:
+                - host: unix:///var/run/docker.sock
+                  refresh_interval: 5s
+              relabel_configs:
+                - source_labels: ['__meta_docker_container_name']
+                  regex: '/(.*)'
+                  target_label: 'container'
+              pipeline_stages:
+                - json:
+                    expressions:
+                      output: log
+                      stream: stream
+                      attrs:
+                - json:
+                    expressions:
+                      tag:
+                    source: attrs
+                - regex:
+                    expression: (?P<image_name>(?:[^|]*[^|])).(?P<container_name>(?:[^|]*[^|])).(?P<image_id>(?:[^|]*[^|])).(?P<container_id>(?:[^|]*[^|]))
+                    source: tag
+                - timestamp:
+                    format: RFC3339
+                    source: time
+                - labels:
+                    tag:
+                    stream:
+                    image_name:
+                    container_name:
+                    image_id:
+                    container_id:
+                - output:
+                    source: output
+            - job_name: traefik_logs
+              static_configs:
+                - targets:
+                    - traefik
+                  labels:
+                    job: traefik
+                    __path__: /var/logs/traefik/*log
+    command: -config.file=/etc/promtail/promtail-config.yaml
+    environment:
+      - TZ=$TZ
+
+  prometheus:
+    image: prom/prometheus:main
+    user: "0:0"
+    volumes:
+      - ${COOLIFY_VOLUME_APP}/prometheus:/prometheus
+      - /etc/timezone:/etc/timezone:ro
+      - /etc/localtime:/etc/localtime:ro
+      - type: bind
+        source: ./prometheus/config.yml
+        target: /etc/prometheus/prometheus.yml
+        content: |
+          global:
+            scrape_interval:     15s
+            evaluation_interval: 15s
+          rule_files:
+            - 'alert.rules'
+          scrape_configs:
+            - job_name: 'cadvisor'
+              scrape_interval: 5s
+              static_configs:
+                - targets:
+                  - cadvisor:8080
+            - job_name: 'crowdsec'
+              scrape_interval: 5s
+              static_configs:
+                - targets:
+                  - crowdsec:6060
+            - job_name: 'node_exporter'
+              scrape_interval: 5s
+              static_configs:
+                - targets:
+                  - node_exporter:9100
+      - type: bind
+        source: ./prometheus/alert.rules.yml
+        target: /etc/prometheus/alert.rules.yml
+        content: |
+          groups:
+          - name: traefik
+            rules:
+            - alert: service_down
+              expr: up == 0
+              for: 2m
+              labels:
+                severity: page
+              annotations:
+                summary: "Instance {{ $labels.instance }} down"
+                description: "{{ $labels.instance }} of job {{ $labels.job }} has been down for more than 2 minutes"
+    command:
+      - "--web.route-prefix=/"
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--web.console.libraries=/usr/share/prometheus/console_libraries"
+      - "--web.console.templates=/usr/share/prometheus/consoles"
+      - "--web.enable-lifecycle"
+    environment:
+      - TZ=$TZ
