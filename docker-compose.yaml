@@ -34,7 +34,7 @@ services:
       - prometheus.job=cadvisor
       - prometheus.address=cadvisor
       # - prometheus.path=/
-      - prometheus.port:8080
+      - prometheus.port=8080
 
   pdc:
     # https://grafana.com/docs/grafana-cloud/connect-externally-hosted/private-data-source-connect/#private-data-source-connect-pdc-concepts
@@ -174,7 +174,7 @@ services:
                   labels:
                     job: traefik
                     __path__: /var/logs/traefik/*log
-                    
+
     command: -config.file=/etc/promtail/promtail-config.yaml
     environment:
       - TZ=${TZ}
