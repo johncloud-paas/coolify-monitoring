@@ -33,6 +33,7 @@ services:
     labels:
       - prometheus.job=cadvisor
       - prometheus.address=cadvisor
+      # - prometheus.path=/
       - prometheus.port:8080
 
   pdc:
@@ -110,6 +111,7 @@ services:
               kvstore:
                 store: inmemory
             enable_api: true
+
     command: -config.file=/etc/loki/loki-config.yaml
     environment:
       - TZ=${TZ}
@@ -172,6 +174,7 @@ services:
                   labels:
                     job: traefik
                     __path__: /var/logs/traefik/*log
+                    
     command: -config.file=/etc/promtail/promtail-config.yaml
     environment:
       - TZ=${TZ}
@@ -227,6 +230,7 @@ services:
               static_configs:
                 - targets:
                   - speedtest:9798
+
       - type: bind
         source: ./prometheus/alert.rules.yml
         target: /etc/prometheus/alert.rules.yml
@@ -242,6 +246,7 @@ services:
               annotations:
                 summary: "Instance {{ $$labels.instance }} down"
                 description: "{{ $$labels.instance }} of job {{ $$labels.job }} has been down for more than 2 minutes"
+
     command:
       - "--web.route-prefix=/"
       - "--config.file=/etc/prometheus/prometheus.yml"
