@@ -25,7 +25,7 @@ services:
       - /var/run:/var/run:ro
       - /sys:/sys:ro
       - /var/lib/docker/:/var/lib/docker:ro
-    command: -max_procs=2 -docker_only=true
+    command: -max_procs=1 -docker_only=true
     environment:
       - TZ=${TZ}
     depends_on:
