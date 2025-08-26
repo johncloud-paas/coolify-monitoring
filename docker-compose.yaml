@@ -36,7 +36,6 @@ services:
     image: grafana/pdc-agent:latest
     depends_on:
       - prometheus
-      - loki
     environment:
       - GRAFANA_PDC_TOKEN=${GRAFANA_PDC_TOKEN}
       - GRAFANA_PDC_CLUSTER=${GRAFANA_PDC_CLUSTER}
