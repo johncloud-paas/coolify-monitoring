@@ -41,6 +41,229 @@ services:
       - GRAFANA_PDC_CLUSTER=${GRAFANA_PDC_CLUSTER}
       - GRAFANA_PDC_GCP_ID=${GRAFANA_PDC_GCP_ID}
     command: ["-token","${GRAFANA_PDC_TOKEN}","-cluster","${GRAFANA_PDC_CLUSTER}","-gcloud-hosted-grafana-id","${GRAFANA_PDC_GCP_ID}"]
+        
+  promtail:
+    image:  grafana/promtail:latest
+    volumes:
+      - type: bind
+        source: ./promtail/config.yml
+        target: /etc/promtail/docker-config.yaml
+        content: |
+          # https://grafana.com/docs/loki/latest/clients/promtail/configuration/
+          # https://docs.docker.com/engine/api/v1.41/#operation/ContainerList
+          server:
+            http_listen_port: 9080
+            grpc_listen_port: 0
+
+          positions:
+            filename: /tmp/positions.yaml
+
+          clients:
+            - url: http://loki:3100/loki/api/v1/push
+
+          scrape_configs:
+            - job_name: snort3
+              static_configs:
+                - targets:
+                    - localhost
+                  labels:
+                    job: snort3
+                    __path__: /var/log/snort/*.txt
+
+              pipeline_stages:
+                - json:
+                    expressions:
+                      timestamp: timestamp
+                      src_ip: src_ip
+                      dst_ip: dst_ip
+                      severity: severity
+                      signature: signature
+
+                - labels:
+                    severity:
+                    src_ip:
+                    dst_ip:
+
+                - timestamp:
+                    source: timestamp
+                    format: RFC3339
+                    
+            - job_name: container_logs
+              docker_sd_configs:
+                - host: unix:///var/run/docker.sock
+                  refresh_interval: 5s
+
+              relabel_configs:
+                - source_labels: ['__meta_docker_container_name']
+                  regex: '/(.*)'
+                  target_label: 'container'
+
+              pipeline_stages:
+                - json:
+                    expressions:
+                      output: log
+                      stream: stream
+                      attrs:
+                - json:
+                    expressions:
+                      tag:
+                    source: attrs
+                - regex:
+                    expression: (?P<image_name>(?:[^|]*[^|])).(?P<container_name>(?:[^|]*[^|])).(?P<image_id>(?:[^|]*[^|])).(?P<container_id>(?:[^|]*[^|]))
+                    source: tag
+                - timestamp:
+                    format: RFC3339
+                    source: time
+                - labels:
+                    tag:
+                    stream:
+                    image_name:
+                    container_name:
+                    image_id:
+                    container_id:
+                - output:
+                    source: output
+
+            - job_name: traefik_logs
+              # https://medium.com/@svenvanginkel/monitor-traefik-with-grafana-prometheus-loki-206611394552
+              static_configs:
+                - targets:
+                    - traefik
+                  labels:
+                    job: traefik
+                    __path__: /var/logs/traefik/*log
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    command: -config.file=/etc/promtail/docker-config.yaml
+    environment:
+      - TZ=$TZ
+
+  loki:
+    image: grafana/loki:latest
+    user: "0:0"
+    depends_on:
+      - promtail
+    volumes:
+      - ./loki/data:/loki
+      - type: bind
+        source: ./loki/config.yml
+        target: /etc/loki/loki-config.yaml
+        content: |
+          # (default configuration)
+          auth_enabled: false
+
+          server:
+            http_listen_port: 3100
+
+          ingester:
+            lifecycler:
+              address: 127.0.0.1
+              ring:
+                kvstore:
+                  store: inmemory
+                replication_factor: 1
+              final_sleep: 0s
+            chunk_idle_period: 1h       # Any chunk not receiving new logs in this time will be flushed
+            max_chunk_age: 1h           # All chunks will be flushed when they hit this age, default is 1h
+            chunk_target_size: 1048576  # Loki will attempt to build chunks up to 1.5MB, flushing first if chunk_idle_period or max_chunk_age is reached first
+            chunk_retain_period: 30s    # Must be greater than index read cache TTL if using an index cache (Default index read cache TTL is 5m)
+
+          schema_config:
+            configs:
+              - from: 2020-10-24
+                # store: boltdb-shipper
+                store: tsdb
+                object_store: filesystem
+                schema: v13
+                index:
+                  prefix: index_
+                  period: 24h
+
+          storage_config:
+            # boltdb_shipper:
+            #   active_index_directory: /loki/boltdb-shipper-active
+            #   cache_location: /loki/boltdb-shipper-cache
+            #   cache_ttl: 24h         # Can be increased for faster performance over longer query periods, uses more disk space    shared_store: filesystem
+            filesystem:
+              directory: /loki/chunks
+            # Configures storing index in an Object Store
+            # (GCS/S3/Azure/Swift/COS/Filesystem) in a prometheus TSDB-like format. Required
+            # fields only required when TSDB is defined in config.
+            tsdb_shipper:
+              # Directory where ingesters would write index files which would then be
+              # uploaded by shipper to configured storage
+              # CLI flag: -tsdb.shipper.active-index-directory
+              active_index_directory: /loki/index
+
+              # Cache location for restoring index files from storage for queries
+              # CLI flag: -tsdb.shipper.cache-location
+              cache_location: /loki/cache
+
+              # TTL for index files restored in cache for queries
+              # CLI flag: -tsdb.shipper.cache-ttl
+              # [cache_ttl: <duration> | default = 24h]
+
+              # Resync downloaded files with the storage
+              # CLI flag: -tsdb.shipper.resync-interval
+              # [resync_interval: <duration> | default = 5m]
+
+              # Number of days of common index to be kept downloaded for queries. For per
+              # tenant index query readiness, use limits overrides config.
+              # CLI flag: -tsdb.shipper.query-ready-num-days
+              # [query_ready_num_days: <int> | default = 0]
+
+              # index_gateway_client:
+                # The grpc_client block configures the gRPC client used to communicate
+                # between a client and server component in Loki.
+                # The CLI flags prefix for this block configuration is:
+                # querier.frontend-grpc-client
+                # [grpc_client_config: <grpc_client>]
+
+                # Hostname or IP of the Index Gateway gRPC server running in simple mode.
+                # Can also be prefixed with dns+, dnssrv+, or dnssrvnoa+ to resolve a DNS A
+                # record with multiple IP's, a DNS SRV record with a followup A record
+                # lookup, or a DNS SRV record without a followup A record lookup,
+                # respectively.
+                # CLI flag: -tsdb.shipper.index-gateway-client.server-address
+                # [server_address: <string> | default = ""]
+
+                # Whether requests sent to the gateway should be logged or not.
+                # CLI flag: -tsdb.shipper.index-gateway-client.log-gateway-requests
+                # [log_gateway_requests: <boolean> | default = false]
+
+              # [ingestername: <string> | default = ""]
+
+              # [mode: <string> | default = ""]
+
+              # [ingesterdbretainperiod: <duration>]
+
+          compactor:
+            working_directory: /loki/boltdb-shipper-compactor
+
+          limits_config:
+            reject_old_samples: true
+            reject_old_samples_max_age: 168h
+            ingestion_burst_size_mb: 16
+            ingestion_rate_mb: 16
+
+          table_manager:
+            retention_deletes_enabled: false
+            retention_period: 0s
+
+          ruler:
+            storage:
+              type: local
+              local:
+                directory: /loki/rules
+            rule_path: /loki/rules-temp
+            alertmanager_url: localhost
+            ring:
+              kvstore:
+                store: inmemory
+            enable_api: true
+    command: -config.file=/etc/loki/loki-config.yaml
+    environment:
+      - TZ=$TZ
 
   prometheus:
     image: prom/prometheus:main
