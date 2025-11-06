@@ -80,18 +80,18 @@ services:
                       signature: signature
                       
                 - geoip:
-                    db: /geoip/GeoLite2-City.mmdb   # Path to your GeoIP database
+                    db: /geoip/GeoLite2-City.mmdb
                     db_type: city
-                    source: src_ip                      # Field to look up in GeoIP
+                    source: src_ip
 
                 - labels:
                     severity:
                     src_ip:
                     dst_ip:
-                    country: country
-                    city: city
-                    latitude: latitude
-                    longitude: longitude
+                    country: geoip_country_name
+                    city: geoip_city_name
+                    latitude: geoip_location_latitude
+                    longitude: geoip_location_longitude
 
                 - timestamp:
                     source: timestamp
