@@ -78,11 +78,20 @@ services:
                       dst_ip: dst_ip
                       severity: severity
                       signature: signature
+                      
+                - geoip:
+                    db: /geoip/GeoLite2-City.mmdb   # Path to your GeoIP database
+                    db_type: city
+                    source: src_ip                      # Field to look up in GeoIP
 
                 - labels:
                     severity:
                     src_ip:
                     dst_ip:
+                    country: country
+                    city: city
+                    latitude: latitude
+                    longitude: longitude
 
                 - timestamp:
                     source: timestamp
@@ -132,6 +141,7 @@ services:
                   labels:
                     job: traefik
                     __path__: /traefik/logs/*log
+      - ./geoip:/geoip:ro
       - /var/lib/docker/containers:/var/lib/docker/containers:ro
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - /data/coolify/proxy/logs:/traefik/logs:ro
