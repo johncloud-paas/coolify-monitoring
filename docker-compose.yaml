@@ -74,10 +74,17 @@ services:
                 - json:
                     expressions:
                       timestamp: timestamp
-                      src_ip: src_ip
-                      dst_ip: dst_ip
+                      src_ap: src_ap
+                      dst_ap: dst_ap
                       severity: severity
                       signature: signature
+                      proto: proto
+                      action: action
+                      rule: rule
+      
+                - regex:
+                    expression: '^(?P<src_ip>[0-9.]+):\d+$'
+                    source: src_ap
                       
                 - geoip:
                     db: /geoip/GeoLite2-City.mmdb
@@ -87,7 +94,6 @@ services:
                 - labels:
                     severity:
                     src_ip:
-                    dst_ip:
                     country: geoip_country_name
                     city: geoip_city_name
                     latitude: geoip_location_latitude
