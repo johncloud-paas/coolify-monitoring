@@ -163,7 +163,11 @@ services:
     volumes:
       - ./alloy/config:/etc/alloy
       - ./alloy/data:/var/lib/alloy/data
+      - ./geoip:/geoip:ro
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
       - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /data/coolify/proxy/logs:/traefik/logs:ro
+      - /var/log/snort:/var/log/snort:ro
     command: 'run --server.http.listen-addr=0.0.0.0:12345 --storage.path=/var/lib/alloy/data /etc/alloy/config.alloy'
     labels:
       - traefik.http.middlewares.authentik@file
