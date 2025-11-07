@@ -165,6 +165,8 @@ services:
       - ./alloy/data:/var/lib/alloy/data
       - /var/run/docker.sock:/var/run/docker.sock:ro
     command: 'run --server.http.listen-addr=0.0.0.0:12345 --storage.path=/var/lib/alloy/data /etc/alloy/config.alloy'
+    labels:
+      - traefik.http.middlewares.authentik@file
 
   loki:
     image: grafana/loki:latest
