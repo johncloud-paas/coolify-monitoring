@@ -85,19 +85,21 @@ services:
                 - regex:
                     expression: '^(?P<src_ip>[0-9.]+):\d+$'
                     source: src_ap
-                      
+                - regex:
+                    expression: '^(?P<dst_ip>[0-9.]+):\d+$'
+                    source: dst_ap
+                    
                 - geoip:
                     db: /geoip/GeoLite2-City.mmdb
                     db_type: city
                     source: src_ip
+                - geoip:
+                    db: /geoip/GeoLite2-City.mmdb
+                    db_type: city
+                    source: dst_ip
 
                 - labels:
                     severity:
-                    src_ip:
-                    country: geoip_country_name
-                    city: geoip_city_name
-                    latitude: geoip_location_latitude
-                    longitude: geoip_location_longitude
 
                 - timestamp:
                     source: timestamp
@@ -134,8 +136,6 @@ services:
                     stream:
                     image_name:
                     container_name:
-                    image_id:
-                    container_id:
                 - output:
                     source: output
 
@@ -156,11 +156,18 @@ services:
     environment:
       - TZ=$TZ
 
+  alloy:
+    image: grafana/alloy:latest
+    depends_on:
+      - loki
+    volumes:
+      - ./alloy/config.alloy:/etc/alloy/config.alloy
+      - ./alloy/data:/var/lib/alloy/data
+    command: '--server.http.listen-addr=0.0.0.0:12345 --storage.path=/var/lib/alloy/data /etc/alloy/config.alloy'
+
   loki:
     image: grafana/loki:latest
     user: "0:0"
-    depends_on:
-      - promtail
     volumes:
       - ./loki/data:/loki
       - type: bind
