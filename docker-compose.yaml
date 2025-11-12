@@ -56,6 +56,10 @@ services:
           // This configuration reads Snort3 JSON logs, enriches them with GeoIP data,
           // and forwards them to Loki
 
+          livedebugging {
+            enabled = true
+          }
+
           // Local file component to read Snort3 logs
           local.file_match "snort3_logs" {
             path_targets = [{"__path__" = "/var/log/snort/*.txt"}]
@@ -112,8 +116,8 @@ services:
                 src_country      = "geoip_country_name",
                 src_country_code = "geoip_country_code",
                 src_city         = "geoip_city_name",
-                src_latitude     = "geoip_latitude",
-                src_longitude    = "geoip_longitude",
+                src_latitude     = "geoip_location_latitude",
+                src_longitude    = "geoip_location_longitude",
                 src_timezone     = "geoip_timezone",
                 src_subdivision  = "geoip_subdivision_name",
               }
@@ -132,8 +136,8 @@ services:
                 dst_country      = "geoip_country_name",
                 dst_country_code = "geoip_country_code",
                 dst_city         = "geoip_city_name",
-                dst_latitude     = "geoip_latitude",
-                dst_longitude    = "geoip_longitude",
+                dst_latitude     = "geoip_location_latitude",
+                dst_longitude    = "geoip_location_longitude",
                 dst_timezone     = "geoip_timezone",
                 dst_subdivision  = "geoip_subdivision_name",
               }
