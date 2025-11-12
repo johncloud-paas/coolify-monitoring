@@ -49,7 +49,7 @@ services:
     volumes:
       # - ./alloy/config/config.alloy:/etc/alloy
       - type: bind
-        source: ./alloy/config
+        source: ./alloy/config/config.alloy
         target: /etc/alloy/config.alloy
         content: |
           // Snort3 JSON log scraper with GeoIP enrichment for Loki
